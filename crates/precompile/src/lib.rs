@@ -9,6 +9,7 @@ mod hash;
 mod identity;
 mod modexp;
 mod secp256k1;
+mod secp256r1;
 
 use once_cell::race::OnceBox;
 pub use primitives::{
