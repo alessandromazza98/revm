@@ -93,7 +93,8 @@ pub enum SpecId {
     BYZANTIUM = 1,
     ISTANBUL = 2,
     BERLIN = 3,
-    LATEST = 4,
+    ALESSANDRO = 4,
+    LATEST = 5,
 }
 
 impl SpecId {
@@ -192,8 +193,24 @@ impl Precompiles {
         })
     }
 
+    pub fn alessandro() -> &'static Self {
+        static INSTANCE: OnceBox<Precompiles> = OnceBox::new();
+        INSTANCE.get_or_init(|| {
+            let mut precompiles = Box::new(Self::berlin().clone());
+            precompiles.fun.extend(
+                [
+                    // EIP-7212: p256verify
+                    secp256r1::P256VERIFY,
+                ]
+                .into_iter()
+                .map(From::from),
+            );
+            precompiles
+        })
+    }
+
     pub fn latest() -> &'static Self {
-        Self::berlin()
+        Self::alessandro()
     }
 
     pub fn new(spec: SpecId) -> &'static Self {
@@ -202,6 +219,7 @@ impl Precompiles {
             SpecId::BYZANTIUM => Self::byzantium(),
             SpecId::ISTANBUL => Self::istanbul(),
             SpecId::BERLIN => Self::berlin(),
+            SpecId::ALESSANDRO => Self::alessandro(),
             SpecId::LATEST => Self::latest(),
         }
     }

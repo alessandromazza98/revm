@@ -48,3 +48,47 @@ fn p256_verify(i: &[u8], target_gas: u64) -> PrecompileResult {
         Ok((P256VERIFY_BASE, result.into()))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use revm_primitives::hex_literal::hex;
+
+    use super::p256_verify;
+    #[test]
+    fn proper_sig_verify() {
+        let input = hex!("4cee90eb86eaa050036147a12d49004b6b9c72bd725d39d4785011fe190f0b4da73bd4903f0ce3b639bbbf6e8e80d16931ff4bcf5993d58468e8fb19086e8cac36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d604aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44eff37618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e");
+        let target_gas = 3_500u64;
+        let (gas_used, res) = p256_verify(&input, target_gas).unwrap();
+        assert_eq!(gas_used, 3_450u64);
+        let mut expected_res = [0u8; 32];
+        expected_res[31] = 1;
+        assert_eq!(res, expected_res.to_vec());
+    }
+
+    #[test]
+    fn verify_ok() {
+        use p256::{ecdsa::{SigningKey, Signature, signature::Signer}};
+
+        // Signing
+        let signing_key = SigningKey::from_slice(&hex!("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8")).unwrap(); // Serialize with `::to_bytes()`
+        let message = b"ECDSA proves knowledge of a secr";
+        let signature: Signature = signing_key.sign(message);
+
+        // Verification
+        use p256::ecdsa::{VerifyingKey, signature::Verifier};
+        let verifying_key = VerifyingKey::from(&signing_key); // Serialize with `::to_encoded_point()`
+        assert!(verifying_key.verify(message, &signature).is_ok());
+
+        let target_gas = 3_500u64;
+        let mut input = [0u8; 160];
+        input[..32].copy_from_slice(message);
+        input[32..96].copy_from_slice(&signature.to_bytes());
+        input[96..].copy_from_slice(&verifying_key.to_sec1_bytes()[1..]);
+
+        let (gas_used, res) = p256_verify(&input, target_gas).unwrap();
+        assert_eq!(gas_used, 3_450u64);
+        let mut expected_res = [0u8; 32];
+        expected_res[31] = 1;
+        assert_eq!(res, expected_res.to_vec());
+    }
+}
