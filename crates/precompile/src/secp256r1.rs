@@ -1,7 +1,7 @@
 use crate::{CustomPrecompileFn, Error, Precompile, PrecompileAddress, PrecompileResult};
 
 pub const P256VERIFY: PrecompileAddress = PrecompileAddress(
-    crate::u64_to_b160(19),
+    crate::u64_to_b160(10),
     Precompile::Custom(p256_verify as CustomPrecompileFn),
 );
 

@@ -6,7 +6,7 @@ use revm::{primitives::{KECCAK_EMPTY, B160, Env, U256, SpecId::LATEST, TransactT
 fn main() {
     // Create database and insert cache
     let mut cache_state = revm::CacheState::new(false);
-    let p256verify_address = B160::from_str("0x0000000000000000000000000000000000000019").unwrap();
+    let p256verify_address = B160::from_str("0x000000000000000000000000000000000000000a").unwrap();
     //let p256verify_address = B160::from_str("0x0000000000000000000000000000000000000001").unwrap();
     let sender_address = B160::from_str("0xa000000000000000000003000000000000000004").unwrap();
     let acc_info = revm::primitives::AccountInfo {
