@@ -7,8 +7,7 @@ fn main() {
     // Create database and insert cache
     let mut cache_state = revm::CacheState::new(false);
     let p256verify_address = B160::from_str("0x000000000000000000000000000000000000000a").unwrap();
-    //let p256verify_address = B160::from_str("0x0000000000000000000000000000000000000001").unwrap();
-    let sender_address = B160::from_str("0xa000000000000000000003000000000000000004").unwrap();
+    let sender_address = B160::from_str("0xa000000000000000000000000000000000000000").unwrap();
     let acc_info = revm::primitives::AccountInfo {
         balance: U256::from(100_000_000),
         code_hash: KECCAK_EMPTY,
@@ -31,7 +30,6 @@ fn main() {
     env.tx.transact_to = TransactTo::Call(p256verify_address);
     env.tx.gas_limit = 50_000;
     env.tx.data = hex!("4cee90eb86eaa050036147a12d49004b6b9c72bd725d39d4785011fe190f0b4da73bd4903f0ce3b639bbbf6e8e80d16931ff4bcf5993d58468e8fb19086e8cac36dbcd03009df8c59286b162af3bd7fcc0450c9aa81be5d10d312af6c66b1d604aebd3099c618202fcfe16ae7770b0c49ab5eadf74b754204a3bb6060e44eff37618b065f9832de4ca6ca971a7a1adc826d0f7c00181a5fb2ddf79ae00b4e10e").to_vec().into();
-    //env.tx.data = hex!("18c547e4f7b0f325ad1e56f57e26c745b09a3e503d86e00e5255ff7f715d3d1c000000000000000000000000000000000000000000000000000000000000001c73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75feeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549").to_vec().into();
 
     // create EVM
     let cache = cache_state.clone();
