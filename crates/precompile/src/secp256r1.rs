@@ -17,21 +17,14 @@ fn p256_verify(i: &[u8], target_gas: u64) -> PrecompileResult {
     let mut input = [0u8; 160];
     input[..min(i.len(), 160)].copy_from_slice(&i[..min(i.len(), 160)]);
 
-    let mut msg = [0u8; 32];
-    let mut sig = [0u8; 64];
-    let mut pk = [0u8; 64];
-    let mut uncompressed_pk = [0u8; 65];
-
-    msg[0..32].copy_from_slice(&input[0..32]);
-    // r: signature
-    sig[0..32].copy_from_slice(&input[32..64]);
-    // s: signature
-    sig[32..64].copy_from_slice(&input[64..96]);
-    // x: public key
-    pk[0..32].copy_from_slice(&input[96..128]);
-    // y: public key
-    pk[32..64].copy_from_slice(&input[128..160]);
+    // msg signed (msg is already the hash of the original message)
+    let msg: [u8; 32] = input[..32].try_into().unwrap();
+    // r, s: signature
+    let sig: [u8; 64] = input[32..96].try_into().unwrap();
+    // x, y: public key
+    let pk: [u8; 64] = input[96..160].try_into().unwrap();
     // append 0x04 to the public key: uncompressed form
+    let mut uncompressed_pk = [0u8; 65];
     uncompressed_pk[0] = 0x04;
     uncompressed_pk[1..].copy_from_slice(&pk);
 
