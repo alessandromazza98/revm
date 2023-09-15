@@ -1,18 +1,25 @@
 use super::{
     bundle_state::BundleRetention, cache::CacheState, plain_account::PlainStorage, BundleState,
-    CacheAccount, TransitionState,
+    CacheAccount, StateBuilder, TransitionAccount, TransitionState,
 };
-use crate::TransitionAccount;
-use alloc::collections::{btree_map, BTreeMap};
+use crate::db::EmptyDB;
+use alloc::{
+    boxed::Box,
+    collections::{btree_map, BTreeMap},
+    vec::Vec,
+};
 use revm_interpreter::primitives::{
     db::{Database, DatabaseCommit},
     hash_map, Account, AccountInfo, Bytecode, HashMap, B160, B256, BLOCK_HASH_HISTORY, U256,
 };
 
+/// Database boxed with a lifetime and Send.
+pub type DBBox<'a, E> = Box<dyn Database<Error = E> + Send + 'a>;
+
 /// More constrained version of State that uses Boxed database with a lifetime.
 ///
 /// This is used to make it easier to use State.
-pub type StateDBBox<'a, DBError> = State<Box<dyn Database<Error = DBError> + Send + 'a>>;
+pub type StateDBBox<'a, E> = State<DBBox<'a, E>>;
 
 /// State of blockchain.
 ///
@@ -51,7 +58,26 @@ pub struct State<DB: Database> {
     pub block_hashes: BTreeMap<u64, B256>,
 }
 
+// Have ability to call State::builder without having to specify the type.
+impl State<EmptyDB> {
+    /// Return the builder that build the State.
+    pub fn builder() -> StateBuilder<EmptyDB> {
+        StateBuilder::default()
+    }
+}
+
 impl<DB: Database> State<DB> {
+    /// Returns the size hint for the inner bundle state.
+    /// See [BundleState::size_hint] for more info.
+    ///
+    /// Returns `0` if bundle state is not set.
+    pub fn bundle_size_hint(&self) -> usize {
+        self.bundle_state
+            .as_ref()
+            .map(|s| s.size_hint())
+            .unwrap_or_default()
+    }
+
     /// Iterate over received balances and increment all account balances.
     /// If account is not found inside cache state it will be loaded from database.
     ///
@@ -167,12 +193,18 @@ impl<DB: Database> State<DB> {
         }
     }
 
+    // TODO make cache aware of transitions dropping by having global transition counter.
     /// Takes changeset and reverts from state and replaces it with empty one.
     /// This will trop pending Transition and any transitions would be lost.
     ///
-    /// TODO make cache aware of transitions dropping by having global transition counter.
+    /// NOTE: If either:
+    /// * The [State] has not been built with [StateBuilder::with_bundle_update], or
+    /// * The [State] has a [TransitionState] set to `None` when
+    /// [TransitionState::merge_transitions] is called,
+    ///
+    /// this will panic.
     pub fn take_bundle(&mut self) -> BundleState {
-        std::mem::take(self.bundle_state.as_mut().unwrap())
+        core::mem::take(self.bundle_state.as_mut().unwrap())
     }
 }
 
@@ -269,26 +301,23 @@ impl<DB: Database> DatabaseCommit for State<DB> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        db::{
-            states::reverts::AccountInfoRevert, AccountRevert, AccountStatus, BundleAccount,
-            RevertToSlot,
-        },
-        StateBuilder,
+    use crate::db::{
+        states::reverts::AccountInfoRevert, AccountRevert, AccountStatus, BundleAccount,
+        RevertToSlot,
     };
-    use revm_interpreter::primitives::{keccak256, StorageSlot};
+    use revm_interpreter::primitives::StorageSlot;
 
     #[test]
     fn block_hash_cache() {
-        let mut state = StateBuilder::default().build();
+        let mut state = State::builder().build();
         state.block_hash(U256::from(1)).unwrap();
         state.block_hash(U256::from(2)).unwrap();
 
         let test_number = BLOCK_HASH_HISTORY as u64 + 2;
 
-        let block1_hash = keccak256(&U256::from(1).to_be_bytes::<{ U256::BYTES }>());
-        let block2_hash = keccak256(&U256::from(2).to_be_bytes::<{ U256::BYTES }>());
-        let block_test_hash = keccak256(&U256::from(test_number).to_be_bytes::<{ U256::BYTES }>());
+        let block1_hash = B256::from(U256::from(1).to_be_bytes());
+        let block2_hash = B256::from(U256::from(2).to_be_bytes());
+        let block_test_hash = B256::from(U256::from(test_number).to_be_bytes());
 
         assert_eq!(
             state.block_hashes,
@@ -310,7 +339,7 @@ mod tests {
     /// state of the account before the block.
     #[test]
     fn reverts_preserve_old_values() {
-        let mut state = StateBuilder::default().with_bundle_update().build();
+        let mut state = State::builder().with_bundle_update().build();
 
         let (slot1, slot2, slot3) = (U256::from(1), U256::from(2), U256::from(3));
 
@@ -552,10 +581,11 @@ mod tests {
         );
     }
 
-    /// Checks that the accounts and storages that are changed within the block and reverted to their previous state do not appear in the reverts.
+    /// Checks that the accounts and storages that are changed within the
+    /// block and reverted to their previous state do not appear in the reverts.
     #[test]
     fn bundle_scoped_reverts_collapse() {
-        let mut state = StateBuilder::default().with_bundle_update().build();
+        let mut state = State::builder().with_bundle_update().build();
 
         // Non-existing account.
         let new_account_address = B160::from_slice(&[0x1; 20]);
@@ -689,39 +719,15 @@ mod tests {
         let mut bundle_state = state.take_bundle();
         bundle_state.reverts.sort();
 
-        assert_eq!(
-            bundle_state.reverts.as_ref(),
-            Vec::from([Vec::from([
-                // new account is destroyed as if it never existed.
-                // ( ... )
-                //
-                // existing account should not result in an actionable revert
-                (
-                    existing_account_address,
-                    AccountRevert {
-                        account: AccountInfoRevert::DoNothing,
-                        previous_status: AccountStatus::Loaded,
-                        ..Default::default()
-                    }
-                ),
-                // existing account with storage should not result in an actionable revert
-                (
-                    existing_account_with_storage_address,
-                    AccountRevert {
-                        account: AccountInfoRevert::DoNothing,
-                        previous_status: AccountStatus::Loaded,
-                        storage: HashMap::default(),
-                        wipe_storage: false
-                    }
-                ),
-            ])])
-        );
+        // both account info and storage are left as before transitions,
+        // therefore there is nothing to revert
+        assert_eq!(bundle_state.reverts.as_ref(), Vec::from([Vec::from([])]));
     }
 
     /// Checks that the behavior of selfdestruct within the block is correct.
     #[test]
     fn selfdestruct_state_and_reverts() {
-        let mut state = StateBuilder::default().with_bundle_update().build();
+        let mut state = State::builder().with_bundle_update().build();
 
         // Existing account.
         let existing_account_address = B160::from_slice(&[0x1; 20]);

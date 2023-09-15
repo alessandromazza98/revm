@@ -1,18 +1,18 @@
-use super::{cache::CacheState, BundleState, State, TransitionState};
+use super::{cache::CacheState, state::DBBox, BundleState, State, TransitionState};
 use crate::db::EmptyDB;
 use alloc::collections::BTreeMap;
-use revm_interpreter::primitives::{db::Database, B256};
+use revm_interpreter::primitives::{
+    db::{Database, DatabaseRef, WrapDatabaseRef},
+    B256,
+};
 
 /// Allows building of State and initializing it with different options.
 pub struct StateBuilder<DB> {
+    /// Database that we use to fetch data from.
+    database: DB,
     /// Enabled state clear flag that is introduced in Spurious Dragon hardfork.
     /// Default is true as spurious dragon happened long time ago.
     with_state_clear: bool,
-    /// Optional database that we use to fetch data from. If database is not present, we will
-    /// return not existing account and storage.
-    ///
-    /// Note: It is marked as Send so database can be shared between threads.
-    database: DB, //Box<dyn Database<Error = DBError> + Send + 'a>,
     /// if there is prestate that we want to use.
     /// This would mean that we have additional state layer between evm and disk/database.
     with_bundle_prestate: Option<BundleState>,
@@ -29,11 +29,28 @@ pub struct StateBuilder<DB> {
     with_block_hashes: BTreeMap<u64, B256>,
 }
 
-impl Default for StateBuilder<Box<EmptyDB>> {
+impl StateBuilder<EmptyDB> {
+    /// Create a new builder with an empty database.
+    ///
+    /// If you want to instatiate it with a specific database, use
+    /// [`new_with_database`](Self::new_with_database).
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<DB: Database + Default> Default for StateBuilder<DB> {
     fn default() -> Self {
+        Self::new_with_database(DB::default())
+    }
+}
+
+impl<DB: Database> StateBuilder<DB> {
+    /// Create a new builder with the given database.
+    pub fn new_with_database(database: DB) -> Self {
         Self {
+            database,
             with_state_clear: true,
-            database: Box::<EmptyDB>::default(),
             with_cache_prestate: None,
             with_bundle_prestate: None,
             with_bundle_update: false,
@@ -41,18 +58,9 @@ impl Default for StateBuilder<Box<EmptyDB>> {
             with_block_hashes: BTreeMap::new(),
         }
     }
-}
 
-impl<DB: Database> StateBuilder<DB> {
-    /// Create default instance of builder.
-    pub fn new() -> StateBuilder<Box<EmptyDB>> {
-        StateBuilder::<Box<EmptyDB>>::default()
-    }
-
-    pub fn with_database_boxed<'a, NewDBError>(
-        self,
-        database: Box<dyn Database<Error = NewDBError> + Send + 'a>,
-    ) -> StateBuilder<Box<dyn Database<Error = NewDBError> + Send + 'a>> {
+    /// Set the database.
+    pub fn with_database<ODB: Database>(self, database: ODB) -> StateBuilder<ODB> {
         // cast to the different database,
         // Note that we return different type depending of the database NewDBError.
         StateBuilder {
@@ -64,6 +72,22 @@ impl<DB: Database> StateBuilder<DB> {
             with_background_transition_merge: self.with_background_transition_merge,
             with_block_hashes: self.with_block_hashes,
         }
+    }
+
+    /// Takes [DatabaseRef] and wraps it with [WrapDatabaseRef].
+    pub fn with_database_ref<ODB: DatabaseRef>(
+        self,
+        database: ODB,
+    ) -> StateBuilder<WrapDatabaseRef<ODB>> {
+        self.with_database(WrapDatabaseRef(database))
+    }
+
+    /// With boxed version of database.
+    pub fn with_database_boxed<Error>(
+        self,
+        database: DBBox<'_, Error>,
+    ) -> StateBuilder<DBBox<'_, Error>> {
+        self.with_database(database)
     }
 
     /// By default state clear flag is enabled but for initial sync on mainnet
@@ -135,7 +159,7 @@ impl<DB: Database> StateBuilder<DB> {
         State {
             cache: self
                 .with_cache_prestate
-                .unwrap_or(CacheState::new(self.with_state_clear)),
+                .unwrap_or_else(|| CacheState::new(self.with_state_clear)),
             database: self.database,
             transition_state: if self.with_bundle_update {
                 Some(TransitionState::default())

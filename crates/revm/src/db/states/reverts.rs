@@ -2,8 +2,8 @@ use super::{
     changes::PlainStorageRevert, AccountStatus, BundleAccount, PlainStateReverts,
     StorageWithOriginalValues,
 };
+use alloc::vec::Vec;
 use core::ops::{Deref, DerefMut};
-use rayon::slice::ParallelSliceMut;
 use revm_interpreter::primitives::{AccountInfo, HashMap, B160, U256};
 
 /// Contains reverts of multiple account in multiple transitions (Transitions as a block).
@@ -58,17 +58,13 @@ impl Reverts {
                     AccountInfoRevert::DoNothing => (),
                 }
                 if revert_account.wipe_storage || !revert_account.storage.is_empty() {
-                    let mut account_storage =
-                        revert_account.storage.into_iter().collect::<Vec<_>>();
-                    account_storage.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
                     storage.push(PlainStorageRevert {
                         address,
                         wiped: revert_account.wipe_storage,
-                        storage_revert: account_storage,
+                        storage_revert: revert_account.storage.into_iter().collect::<Vec<_>>(),
                     });
                 }
             }
-            accounts.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
             state_reverts.accounts.push(accounts);
             state_reverts.storage.push(storage);
         }
@@ -92,6 +88,12 @@ pub struct AccountRevert {
 }
 
 impl AccountRevert {
+    /// The approximate size of changes needed to store this account revert.
+    /// `1 + storage_reverts_len`
+    pub fn size_hint(&self) -> usize {
+        1 + self.storage.len()
+    }
+
     /// Very similar to new_selfdestructed but it will add additional zeros (RevertToSlot::Destroyed)
     /// for the storage that are set if account is again created.
     pub fn new_selfdestructed_again(
@@ -164,6 +166,16 @@ impl AccountRevert {
             previous_status: status,
             wipe_storage: true,
         }
+    }
+
+    /// Returns `true` if there is nothing to revert,
+    /// by checking that:
+    /// * both account info and storage have been left untouched
+    /// * we don't need to wipe storage
+    pub fn is_empty(&self) -> bool {
+        self.account == AccountInfoRevert::DoNothing
+            && self.storage.is_empty()
+            && !self.wipe_storage
     }
 }
 
