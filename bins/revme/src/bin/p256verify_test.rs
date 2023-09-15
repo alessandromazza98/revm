@@ -1,7 +1,10 @@
-use std::str::FromStr;
-use std::io::stdout;
 use hex_literal::hex;
-use revm::{primitives::{KECCAK_EMPTY, B160, Env, U256, SpecId::LATEST, TransactTo}, inspectors::TracerEip3155};
+use revm::{
+    inspectors::TracerEip3155,
+    primitives::{Env, SpecId::LATEST, TransactTo, B160, KECCAK_EMPTY, U256},
+};
+use std::io::stdout;
+use std::str::FromStr;
 
 fn main() {
     // Create database and insert cache
@@ -20,7 +23,7 @@ fn main() {
     let mut env = Env::default();
 
     // cfg env
-    env.cfg.chain_id = U256::from(1); // for mainnet
+    env.cfg.chain_id = 1; // for mainnet
     env.cfg.spec_id = LATEST;
 
     //tx env
@@ -33,17 +36,19 @@ fn main() {
 
     // create EVM
     let cache = cache_state.clone();
-    let mut state = revm::db::StateBuilder::default()
-    .with_cached_prestate(cache)
-    .with_bundle_update()
-    .build();
+    let mut state = revm::db::State::builder()
+        .with_cached_prestate(cache)
+        .with_bundle_update()
+        .build();
 
     let mut evm = revm::new();
     evm.database(&mut state);
     evm.env = env.clone();
 
     // execute tx
-    let result = evm.inspect_commit(TracerEip3155::new(Box::new(stdout()), false, false)).unwrap();
-    
+    let result = evm
+        .inspect_commit(TracerEip3155::new(Box::new(stdout()), false, false))
+        .unwrap();
+
     println!("{:?}", result);
 }

@@ -95,6 +95,7 @@ pub enum SpecId {
     ISTANBUL,
     BERLIN,
     CANCUN,
+    ALESSANDRO,
     LATEST,
 }
 
@@ -221,7 +222,7 @@ impl Precompiles {
     pub fn alessandro() -> &'static Self {
         static INSTANCE: OnceBox<Precompiles> = OnceBox::new();
         INSTANCE.get_or_init(|| {
-            let mut precompiles = Box::new(Self::berlin().clone());
+            let mut precompiles = Box::new(Self::cancun().clone());
             precompiles.fun.extend(
                 [
                     // EIP-7212: p256verify

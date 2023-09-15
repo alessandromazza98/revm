@@ -1,8 +1,8 @@
-use crate::{CustomPrecompileFn, Error, Precompile, PrecompileAddress, PrecompileResult};
+use crate::{Error, Precompile, PrecompileAddress, PrecompileResult, StandardPrecompileFn};
 
 pub const P256VERIFY: PrecompileAddress = PrecompileAddress(
     crate::u64_to_b160(10),
-    Precompile::Custom(p256_verify as CustomPrecompileFn),
+    Precompile::Standard(p256_verify as StandardPrecompileFn),
 );
 
 fn p256_verify(i: &[u8], target_gas: u64) -> PrecompileResult {
