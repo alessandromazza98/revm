@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [14.0.1](https://github.com/alessandromazza98/revm/compare/revm-inspector-v14.0.0...revm-inspector-v14.0.1) - 2025-11-12
+
+### Other
+
+- updated the following local packages: revm-context, revm-interpreter, revm-handler
+
 ## [14.0.0](https://github.com/bluealloy/revm/compare/revm-inspector-v12.0.2...revm-inspector-v14.0.0) - 2025-11-10
 
 ### Added
