@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.0.7](https://github.com/alessandromazza98/revm/compare/revm-database-v9.0.6...revm-database-v9.0.7) - 2025-11-28
+
+### Other
+
+- optimize vector initialization with size hints in state and precompile modules ([#3191](https://github.com/alessandromazza98/revm/pull/3191))
+
 ## [9.0.6](https://github.com/bluealloy/revm/compare/revm-database-v9.0.5...revm-database-v9.0.6) - 2025-11-14
 
 ### Fixed
